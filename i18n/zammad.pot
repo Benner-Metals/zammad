@@ -1556,6 +1556,10 @@ msgstr ""
 msgid "After approval, please re-connect your Microsoft365 mailbox."
 msgstr ""
 
+#: app/assets/javascripts/app/controllers/_channel/microsoft_graph.coffee:274
+msgid "After importing messages"
+msgstr ""
+
 #: app/assets/javascripts/app/views/package.jst.eco:20
 msgid "After installing, updating, or uninstalling packages the following commands need to be executed on the server:"
 msgstr ""
@@ -2377,7 +2381,7 @@ msgstr ""
 msgid "Attribute that uniquely identifies the user. If unset, the name identifier returned by the IDP is used."
 msgstr ""
 
-#: app/assets/javascripts/app/controllers/ticket_overview/settings.coffee:31
+#: app/assets/javascripts/app/controllers/ticket_overview/settings.coffee:32
 #: app/assets/javascripts/app/models/overview.coffee:15
 #: app/frontend/apps/desktop/pages/ticket/components/TicketSidebar/TicketSidebarInformation/TicketSidebarInformationContent.vue:134
 msgid "Attributes"
@@ -3094,7 +3098,7 @@ msgid "Cancel"
 msgstr ""
 
 #: app/assets/javascripts/app/controllers/_ai/ai_agent.coffee:386
-#: app/assets/javascripts/app/controllers/_application_controller/_modal.coffee:119
+#: app/assets/javascripts/app/controllers/_application_controller/_modal.coffee:121
 #: app/assets/javascripts/app/views/admin_password_auth/request.jst.eco:8
 #: app/assets/javascripts/app/views/admin_password_auth/request_sent.jst.eco:7
 #: app/assets/javascripts/app/views/agent_ticket_create.jst.eco:55
@@ -5843,6 +5847,7 @@ msgstr ""
 #: app/assets/javascripts/app/controllers/_application_controller/_modal_generic_confirm_delete.coffee:4
 #: app/assets/javascripts/app/controllers/_application_controller/_modal_generic_destroy_confirm.coffee:4
 #: app/assets/javascripts/app/controllers/_application_controller/table.coffee:700
+#: app/assets/javascripts/app/controllers/_channel/microsoft_graph.coffee:274
 #: app/assets/javascripts/app/controllers/_manage/knowledge_base.coffee:130
 #: app/assets/javascripts/app/controllers/data_privacy.coffee:188
 #: app/assets/javascripts/app/controllers/knowledge_base/base_form.coffee:118
@@ -6141,6 +6146,10 @@ msgstr ""
 
 #: app/assets/javascripts/app/views/integration/cti.jst.eco:114
 msgid "Destination caller ID or queue"
+msgstr ""
+
+#: app/assets/javascripts/app/controllers/_channel/microsoft_graph.coffee:275
+msgid "Destination folder"
 msgstr ""
 
 #: app/assets/javascripts/app/controllers/_channel/email.coffee:264
@@ -8612,12 +8621,12 @@ msgstr ""
 msgid "Group selection for ticket creation"
 msgstr ""
 
-#: app/assets/javascripts/app/controllers/ticket_overview/settings.coffee:60
+#: app/assets/javascripts/app/controllers/ticket_overview/settings.coffee:61
 #: app/assets/javascripts/app/models/overview.coffee:42
 msgid "Grouping by"
 msgstr ""
 
-#: app/assets/javascripts/app/controllers/ticket_overview/settings.coffee:70
+#: app/assets/javascripts/app/controllers/ticket_overview/settings.coffee:71
 #: app/assets/javascripts/app/models/overview.coffee:57
 msgid "Grouping order"
 msgstr ""
@@ -9688,8 +9697,12 @@ msgstr ""
 #: lib/external_credential/exchange.rb:43
 #: lib/external_credential/facebook.rb:42
 #: lib/external_credential/google.rb:39
-#: lib/external_credential/microsoft_base.rb:76
+#: lib/external_credential/microsoft_base.rb:80
 msgid "Invalid OAuth state parameter."
+msgstr ""
+
+#: app/models/channel/driver/microsoft_graph_inbound.rb:11
+msgid "Invalid action after importing messages."
 msgstr ""
 
 #: app/services/service/system/run_auto_wizard.rb:17
@@ -9889,7 +9902,7 @@ msgstr ""
 msgid "Items"
 msgstr ""
 
-#: app/assets/javascripts/app/controllers/ticket_overview/settings.coffee:15
+#: app/assets/javascripts/app/controllers/ticket_overview/settings.coffee:16
 msgid "Items per page"
 msgstr ""
 
@@ -9956,7 +9969,6 @@ msgstr ""
 #: app/assets/javascripts/app/controllers/_channel/email.coffee:423
 #: app/assets/javascripts/app/controllers/_channel/google.coffee:62
 #: app/assets/javascripts/app/controllers/_channel/microsoft365.coffee:67
-#: app/assets/javascripts/app/controllers/_channel/microsoft_graph.coffee:274
 #: app/assets/javascripts/app/controllers/getting_started/channel_email.coffee:87
 #: app/frontend/apps/desktop/entities/channel-email/composables/useEmailInboundForm.ts:182
 msgid "Keep messages on server"
@@ -11080,6 +11092,7 @@ msgstr ""
 msgid "Mark all as read"
 msgstr ""
 
+#: app/assets/javascripts/app/controllers/_channel/microsoft_graph.coffee:274
 #: app/frontend/apps/desktop/components/layout/LayoutSidebar/LeftSidebar/LeftSidebarHeader/OnlineNotification/NotificationPopover/NotificationList/NotificationItem.vue:39
 #: app/frontend/apps/mobile/pages/online-notification/components/ActivityMessage.vue:34
 msgid "Mark as read"
@@ -11531,6 +11544,10 @@ msgstr ""
 
 #: app/assets/javascripts/app/controllers/_plugin/keyboard_shortcuts.coffee:341
 msgid "Move left and right"
+msgstr ""
+
+#: app/assets/javascripts/app/controllers/_channel/microsoft_graph.coffee:274
+msgid "Move to folder"
 msgstr ""
 
 #: app/frontend/shared/form/i18n/locales.ts:49
@@ -13894,6 +13911,10 @@ msgstr ""
 msgid "Please select a checklist template."
 msgstr ""
 
+#: app/models/channel/driver/microsoft_graph_inbound.rb:16
+msgid "Please select a destination folder."
+msgstr ""
+
 #: app/frontend/apps/mobile/pages/ticket/composable/useTicketsMerge.ts:55
 msgid "Please select a ticket to merge into."
 msgstr ""
@@ -15914,6 +15935,10 @@ msgstr ""
 msgid "Select Template"
 msgstr ""
 
+#: app/assets/javascripts/app/controllers/_channel/microsoft_graph.coffee:275
+msgid "Select a different folder when moving imported messages."
+msgstr ""
+
 #: app/frontend/apps/desktop/components/CommonTable/TableHeader.vue:418
 msgid "Select all %s results"
 msgstr ""
@@ -16870,7 +16895,7 @@ msgstr ""
 msgid "Sorted %s to position %s."
 msgstr ""
 
-#: app/assets/javascripts/app/controllers/ticket_overview/settings.coffee:40
+#: app/assets/javascripts/app/controllers/ticket_overview/settings.coffee:41
 #: app/assets/javascripts/app/models/overview.coffee:23
 msgid "Sorting by"
 msgstr ""
@@ -16879,7 +16904,7 @@ msgstr ""
 msgid "Sorting mode"
 msgstr ""
 
-#: app/assets/javascripts/app/controllers/ticket_overview/settings.coffee:49
+#: app/assets/javascripts/app/controllers/ticket_overview/settings.coffee:50
 #: app/assets/javascripts/app/models/overview.coffee:31
 msgid "Sorting order"
 msgstr ""
@@ -18078,6 +18103,10 @@ msgstr ""
 msgid "The desktop layout works best on wider screens. Current screen width may not display all desktop content optimally."
 msgstr ""
 
+#: app/models/channel/driver/microsoft_graph_inbound.rb:17
+msgid "The destination folder must differ from the source folder."
+msgstr ""
+
 #: app/frontend/apps/desktop/pages/personal-setting/views/PersonalSettingDevices.vue:73
 msgid "The device could not be deleted."
 msgstr ""
@@ -18170,7 +18199,7 @@ msgstr ""
 msgid "The following contents are provided in the system report:"
 msgstr ""
 
-#: app/assets/javascripts/app/controllers/_application_controller/_modal.coffee:202
+#: app/assets/javascripts/app/controllers/_application_controller/_modal.coffee:204
 msgid "The form content has been changed. Do you want to close it and lose your changes?"
 msgstr ""
 
@@ -18627,19 +18656,19 @@ msgstr ""
 
 #: lib/external_credential/exchange.rb:27
 #: lib/external_credential/google.rb:26
-#: lib/external_credential/microsoft_base.rb:54
+#: lib/external_credential/microsoft_base.rb:58
 msgid "The required parameter 'client_id' is missing."
 msgstr ""
 
 #: lib/external_credential/exchange.rb:28
 #: lib/external_credential/google.rb:27
-#: lib/external_credential/microsoft_base.rb:55
+#: lib/external_credential/microsoft_base.rb:59
 msgid "The required parameter 'client_secret' is missing."
 msgstr ""
 
 #: lib/external_credential/exchange.rb:47
 #: lib/external_credential/google.rb:43
-#: lib/external_credential/microsoft_base.rb:80
+#: lib/external_credential/microsoft_base.rb:84
 msgid "The required parameter 'code' is missing."
 msgstr ""
 
@@ -18997,7 +19026,7 @@ msgid "The user token could not be generated."
 msgstr ""
 
 #: lib/external_credential/exchange.rb:55
-#: lib/external_credential/microsoft_base.rb:88
+#: lib/external_credential/microsoft_base.rb:92
 msgid "The user's 'preferred_username' could not be extracted from 'id_token'."
 msgstr ""
 
@@ -22741,7 +22770,7 @@ msgstr ""
 msgid "archived"
 msgstr ""
 
-#: app/assets/javascripts/app/controllers/ticket_overview/settings.coffee:55
+#: app/assets/javascripts/app/controllers/ticket_overview/settings.coffee:56
 #: app/assets/javascripts/app/models/overview.coffee:37
 #: app/frontend/apps/mobile/pages/ticket/components/TicketList/TicketOrderBySelector.vue:36
 msgid "ascending"
@@ -23001,7 +23030,7 @@ msgstr ""
 msgid "delivered to the customer"
 msgstr ""
 
-#: app/assets/javascripts/app/controllers/ticket_overview/settings.coffee:56
+#: app/assets/javascripts/app/controllers/ticket_overview/settings.coffee:57
 #: app/assets/javascripts/app/models/overview.coffee:38
 #: app/frontend/apps/mobile/pages/ticket/components/TicketList/TicketOrderBySelector.vue:36
 msgid "descending"
