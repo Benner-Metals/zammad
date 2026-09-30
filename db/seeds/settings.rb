@@ -1820,6 +1820,18 @@ Setting.create_if_not_exists(
         placeholder: 'common',
       },
       {
+        display:   __('Microsoft cloud'),
+        null:      true,
+        default:   'global',
+        name:      'cloud',
+        tag:       'select',
+        options:   {
+          'global' => __('Global'),
+          'us_gov' => __('US Government (GCC High)'),
+        },
+        translate: true,
+      },
+      {
         display:   __('Require verified email domain'),
         null:      true,
         default:   false,
@@ -1843,7 +1855,8 @@ Setting.create_if_not_exists(
   },
   state:       {},
   preferences: {
-    permission: ['admin.security'],
+    permission:  ['admin.security'],
+    validations: ['Setting::Validation::MicrosoftOffice365Credentials'],
   },
   frontend:    false
 )
