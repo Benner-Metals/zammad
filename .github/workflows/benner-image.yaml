@@ -1,0 +1,223 @@
+# Copyright (C) 2012-2026 Zammad Foundation, https://zammad-foundation.org/
+
+name: benner-image
+
+# Tests and publishes the Benner Metals Zammad image, upstream 7.2 stable plus the Benner
+#   commits, as ghcr.io/benner-metals/zammad:<upstream build>-bm<N>. See .github/benner/README.md.
+
+on:
+  push:
+    branches:
+      - benner/7.2
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # One build at a time, so every build gets its own -bm<N>.
+  group: benner-image-${{ github.ref }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  specs:
+    if: github.repository == 'Benner-Metals/zammad'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    container:
+      image: zammad/zammad-ci:latest
+    services:
+      postgresql:
+        image: postgres:18
+        env:
+          POSTGRES_USER: zammad
+          POSTGRES_PASSWORD: zammad
+      redis:
+        image: redis:6
+    env:
+      RAILS_ENV: test
+      Z_LOCALES: "en-us:de-de"
+      TZ: 'Europe/London'
+      REDIS_URL: redis://redis:6379
+      CI_SKIP_ASSETS_PRECOMPILE: 'true'
+      CI_SKIP_DB_RESET: 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Install pnpm
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+      - name: Use Node.js 24
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: 'pnpm'
+      - name: Cache Rubygems
+        uses: actions/cache@v6
+        with:
+          path: vendor/bundle
+          key: ${{ runner.os }}-cache-bundler-${{ hashFiles('Gemfile.lock') }}
+      - name: Pre
+        run: .github/workflows/ci/pre.sh
+      - name: Benner specs
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          source /etc/profile.d/rvm.sh
+          .github/benner/specs.sh
+      - name: Translation catalog
+        run: |
+          source /etc/profile.d/rvm.sh
+          bundle exec rails generate zammad:translation_catalog --check
+
+  reserve:
+    # The only job with contents: write. It runs no third-party actions.
+    needs: specs
+    if: github.repository == 'Benner-Metals/zammad' && github.ref == 'refs/heads/benner/7.2'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write # Reserve the image tag as the git tag benner/<image tag>.
+      packages: read
+    outputs:
+      published: ${{ steps.earlier.outputs.published }}
+      image_tag: ${{ steps.reserve.outputs.image_tag }}
+      reserved_in_attempt: ${{ github.run_attempt }}
+      upstream_base: ${{ steps.version.outputs.upstream_base }}
+      upstream_base_build: ${{ steps.version.outputs.upstream_base_build }}
+      benner_commits: ${{ steps.version.outputs.benner_commits }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Determine upstream base and image tags
+        id: version
+        run: |
+          .github/benner/upstream-state.sh | tee -a "$GITHUB_OUTPUT" > "$RUNNER_TEMP/upstream-state.txt"
+          build=$(sed -n 's/^upstream_base_build=//p' "$RUNNER_TEMP/upstream-state.txt")
+          .github/benner/image-tag.sh "$build" | tee -a "$GITHUB_OUTPUT"
+
+      - name: Check for an earlier build of this commit
+        id: earlier
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EXISTING_TAGS: ${{ steps.version.outputs.existing_tags }}
+        run: |
+          # Never push to a reserved tag twice: if no reservation of this commit has an image, the
+          #   commit gets a new number.
+          published=false
+          if [ -n "$EXISTING_TAGS" ]; then
+            docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin <<< "$GITHUB_TOKEN"
+            for tag in $EXISTING_TAGS; do
+              if docker buildx imagetools inspect "ghcr.io/benner-metals/zammad:${tag}" > /dev/null; then
+                published=true
+                echo "published_tag=${tag}" >> "$GITHUB_OUTPUT"
+                break
+              fi
+            done
+          fi
+          echo "published=${published}" >> "$GITHUB_OUTPUT"
+
+      - name: Reserve the image tag
+        if: steps.earlier.outputs.published == 'false'
+        id: reserve
+        env:
+          UPSTREAM_BASE: ${{ steps.version.outputs.upstream_base }}
+          UPSTREAM_BUILD: ${{ steps.version.outputs.upstream_base_build }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          .github/benner/reserve-tag.sh "$UPSTREAM_BUILD" "$UPSTREAM_BASE" | tee -a "$GITHUB_OUTPUT"
+
+      - name: Summary
+        if: steps.earlier.outputs.published == 'true'
+        env:
+          PUBLISHED_TAG: ${{ steps.earlier.outputs.published_tag }}
+        run: |
+          echo "\`${GITHUB_SHA}\` was already published as \`ghcr.io/benner-metals/zammad:${PUBLISHED_TAG}\`; nothing was rebuilt." >> "$GITHUB_STEP_SUMMARY"
+
+  image:
+    needs: reserve
+    if: needs.reserve.outputs.published == 'false'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Require a fresh reservation
+        env:
+          RESERVED_IN_ATTEMPT: ${{ needs.reserve.outputs.reserved_in_attempt }}
+        run: |
+          # Re-running only this job would reuse an earlier attempt's reservation, whose tag may
+          #   already hold an image.
+          if [ "$RESERVED_IN_ATTEMPT" != "$GITHUB_RUN_ATTEMPT" ]; then
+            echo "::error::The image tag was reserved in attempt ${RESERVED_IN_ATTEMPT}. Re-run all jobs to reserve a new one."
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Image metadata
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ghcr.io/benner-metals/zammad
+          flavor: |
+            latest=false
+          tags: |
+            type=raw,value=${{ needs.reserve.outputs.image_tag }}
+          labels: |
+            org.opencontainers.image.description=Zammad ${{ needs.reserve.outputs.upstream_base_build }} with the Benner Metals commits
+            org.opencontainers.image.version=${{ needs.reserve.outputs.image_tag }}
+            com.bennermetals.zammad.upstream-base=${{ needs.reserve.outputs.upstream_base }}
+            com.bennermetals.zammad.upstream-build=${{ needs.reserve.outputs.upstream_base_build }}
+            com.bennermetals.zammad.benner-commits=${{ needs.reserve.outputs.benner_commits }}
+
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          platforms: linux/amd64
+          build-args: |
+            COMMIT_SHA=${{ github.sha }}
+            BUILD_LABEL=${{ needs.reserve.outputs.image_tag }}
+          labels: ${{ steps.meta.outputs.labels }}
+          tags: ${{ steps.meta.outputs.tags }}
+          pull: true
+          push: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Summary
+        env:
+          IMAGE_TAG: ${{ needs.reserve.outputs.image_tag }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+          UPSTREAM_BASE: ${{ needs.reserve.outputs.upstream_base }}
+          UPSTREAM_BUILD: ${{ needs.reserve.outputs.upstream_base_build }}
+          BENNER_COMMITS: ${{ needs.reserve.outputs.benner_commits }}
+        run: |
+          {
+            echo "Published \`ghcr.io/benner-metals/zammad:${IMAGE_TAG}\` (\`${DIGEST}\`)."
+            echo
+            echo "- Upstream base: \`${UPSTREAM_BASE}\` (${UPSTREAM_BUILD})"
+            echo "- Benner commits: \`${BENNER_COMMITS}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
