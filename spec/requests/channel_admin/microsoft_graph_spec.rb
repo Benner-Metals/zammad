@@ -62,6 +62,22 @@ RSpec.describe 'Microsoft Graph channel admin API endpoints', aggregate_failures
       expect(json_response).to include('folders' => folders)
     end
 
+    context 'with a national cloud mailbox' do
+      let!(:channel) { create(:microsoft_graph_channel, inbound_options: { cloud: 'us_gov' }) }
+      let(:graph) { instance_double(MicrosoftGraph, get_message_folders_tree: folders) }
+
+      before do
+        allow(MicrosoftGraph).to receive(:new).and_return(graph)
+      end
+
+      it 'uses that cloud when listing folders' do
+        get "/api/v1/channels/admin/microsoft_graph/#{channel.id}/folders"
+
+        expect(response).to have_http_status(:ok)
+        expect(MicrosoftGraph).to have_received(:new).with(access_token: anything, mailbox: anything, cloud: 'us_gov')
+      end
+    end
+
     context 'when API raises an error' do
       before do
         allow_any_instance_of(MicrosoftGraph).to receive(:get_message_folders_tree).and_raise(MicrosoftGraph::ApiError, { message: 'Error message', code: 'Error code' })
@@ -130,6 +146,31 @@ RSpec.describe 'Microsoft Graph channel admin API endpoints', aggregate_failures
           )
         )
       )
+    end
+
+    it 'persists the move action and destination folder' do
+      post "/api/v1/channels/admin/microsoft_graph/verify/#{channel.id}", params: { options: { folder_id: 'source', post_import_action: 'move', move_to_folder_id: 'destination' } }
+
+      expect(response).to have_http_status(:ok)
+      expect(channel.reload.options.dig(:inbound, :options)).to include(post_import_action: 'move', move_to_folder_id: 'destination', keep_on_server: false)
+    end
+
+    it 'honors a legacy keep-on-server payload after an action was saved' do
+      channel.options[:inbound][:options][:post_import_action] = 'move'
+      channel.options[:inbound][:options][:move_to_folder_id] = 'destination'
+      channel.save!
+
+      post "/api/v1/channels/admin/microsoft_graph/verify/#{channel.id}", params: { options: { keep_on_server: true } }
+
+      expect(response).to have_http_status(:ok)
+      expect(channel.reload.options.dig(:inbound, :options)).to include(post_import_action: 'mark_read', keep_on_server: true)
+    end
+
+    it 'rejects moving back into the source folder' do
+      post "/api/v1/channels/admin/microsoft_graph/verify/#{channel.id}", params: { options: { folder_id: 'source', post_import_action: 'move', move_to_folder_id: 'source' } }
+
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(channel.reload.options.dig(:inbound, :options, :post_import_action)).to be_nil
     end
 
     context 'when group email address is used' do
