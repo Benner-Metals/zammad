@@ -1309,7 +1309,7 @@ export type FormUploadCacheAddPayload = {
   __typename?: 'FormUploadCacheAddPayload';
   /** Errors encountered during execution of the mutation. */
   errors?: Maybe<Array<UserError>>;
-  /** Information about the uploaded files. */
+  /** Information about the uploaded files, in the order of the given files. */
   uploadedFiles: Array<StoredFile>;
 };
 
@@ -2623,7 +2623,7 @@ export type MutationsChannelEmailValidateConfigurationRoundtripArgs = {
 
 /** All available mutations */
 export type MutationsFormUploadCacheAddArgs = {
-  files: Array<UploadFileInput>;
+  files: Array<UploadCacheFileInput>;
   formId: Scalars['FormId']['input'];
 };
 
@@ -2879,7 +2879,7 @@ export type MutationsTicketArticleDeleteArgs = {
 /** All available mutations */
 export type MutationsTicketArticleEmailForwardReplyArgs = {
   articleId: Scalars['ID']['input'];
-  formId: Scalars['FormId']['input'];
+  formId?: InputMaybe<Scalars['FormId']['input']>;
 };
 
 
@@ -5220,6 +5220,8 @@ export type TicketArticleEmailForwardReplyPayload = {
   attachments: Array<StoredFile>;
   /** Errors encountered during execution of the mutation. */
   errors?: Maybe<Array<UserError>>;
+  /** Author name for the reply citation ('On ..., X wrote:'), following the configured email sender format */
+  quotableAuthorName?: Maybe<Scalars['String']['output']>;
   /** 'Cc' information of the original email to be inserted in the quoted email block */
   quotableCc?: Maybe<Scalars['String']['output']>;
   /** 'From' information of the original email to be inserted in the quoted email block */
@@ -6203,6 +6205,20 @@ export type TwoFactorRecoveryInput = {
   recoveryCode: Scalars['String']['input'];
 };
 
+/** A file to be added to the upload cache of a form, either from its content or copied from an existing attachment. */
+export type UploadCacheFileInput = {
+  /** Existing attachment to copy, instead of the content. */
+  attachmentId?: InputMaybe<Scalars['ID']['input']>;
+  /** File content */
+  content?: InputMaybe<Scalars['BinaryString']['input']>;
+  /** Content-Disposition: inline flag */
+  inline?: InputMaybe<Scalars['Boolean']['input']>;
+  /** File name, defaults to the name of the copied attachment. */
+  name?: InputMaybe<Scalars['String']['input']>;
+  /** File's content-type. */
+  type?: InputMaybe<Scalars['String']['input']>;
+};
+
 /** A file to be uploaded. */
 export type UploadFileInput = {
   /** File content */
@@ -7011,10 +7027,6 @@ export type UserSignupInput = {
   firstname?: InputMaybe<Scalars['String']['input']>;
   /** The user last name */
   lastname?: InputMaybe<Scalars['String']['input']>;
-  /** The user login */
-  login?: InputMaybe<Scalars['String']['input']>;
-  /** Additional custom attributes (names + values) */
-  objectAttributeValues?: InputMaybe<Array<ObjectAttributeValueInput>>;
   /** The user password */
   password: Scalars['String']['input'];
 };
@@ -7042,8 +7054,8 @@ export type UserSignupVerifyPayload = {
   __typename?: 'UserSignupVerifyPayload';
   /** Errors encountered during execution of the mutation. */
   errors?: Maybe<Array<UserError>>;
-  /** The current session, if the verification was successful. */
-  session?: Maybe<Session>;
+  /** This indicates if the verification was successful. */
+  success?: Maybe<Scalars['Boolean']['output']>;
 };
 
 /** Users taskbar item */
@@ -7113,8 +7125,6 @@ export type UserTaskbarItemInput = {
   key: Scalars['String']['input'];
   /** The taskbar item notification about changes */
   notify: Scalars['Boolean']['input'];
-  /** Additional custom attributes (names + values) */
-  objectAttributeValues?: InputMaybe<Array<ObjectAttributeValueInput>>;
   /** The taskbar item related object parameters */
   params?: InputMaybe<Scalars['JSON']['input']>;
   /** The taskbar item sorting priority */

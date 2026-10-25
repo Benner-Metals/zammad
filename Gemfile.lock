@@ -212,10 +212,10 @@ GEM
     crack (1.0.1)
       bigdecimal
       rexml
-    crass (1.0.7)
+    crass (1.0.8)
     csv (3.3.6)
     daemons (1.4.1)
-    dalli (5.1.1)
+    dalli (5.1.4)
       logger
     dartsass-rails (0.5.1)
       railties (>= 6.0.0)

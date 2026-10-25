@@ -18,6 +18,7 @@ import {
   getPlainExtensions,
   PlaceholderExtensionName,
 } from '#shared/components/Form/fields/FieldEditor/extensions.ts'
+import { forgetInlineImages } from '#shared/components/Form/fields/FieldEditor/features/image-handler/inlineImageUploads.ts'
 import FieldEditorFooter from '#shared/components/Form/fields/FieldEditor/FieldEditorFooter.vue'
 import type {
   EditorContentType,
@@ -295,10 +296,15 @@ const setEditorContent = (
   })
 }
 
+// tiptap creates the editor only on mount, a value written before is applied then.
+let contentWrittenBeforeMount: string | undefined
+
 // Set the new editor content, when the value was changed from outside (e.g. form schema update).
 const updateValueKey = props.context.node.on('input', ({ payload: newContent }) => {
-  // Early return when no editor exists, keep this in mind, when we have real initial value problems.
-  if (!editor.value) return
+  if (!editor.value) {
+    contentWrittenBeforeMount = newContent
+    return
+  }
 
   const currentContent = getEditorContent(editor.value, contentType.value)
 
@@ -326,9 +332,12 @@ const updateContentTypeKey = props.context.node.on(
   },
 )
 
+const resetKey = props.context.node.on('reset', () => forgetInlineImages(props.context.formId))
+
 onUnmounted(() => {
   props.context.node.off(updateValueKey)
   props.context.node.off(updateContentTypeKey)
+  props.context.node.off(resetKey)
 })
 
 const focusEditor = () => {
@@ -378,9 +387,21 @@ onMounted(() => {
   onLoad.forEach((fn) => fn(editorCustomContext))
   onLoad.length = 0
 
+  if (contentWrittenBeforeMount !== undefined) {
+    setEditorContent(contentWrittenBeforeMount, contentType.value, true)
+    contentWrittenBeforeMount = undefined
+    userHasEditedContent = false
+  }
+
   // The editor may mount after the article form is already set up (async import,
   //   late dialog rendering) - reconcile the signature it may have missed (#804).
   syncSignature(true)
+
+  editor.value?.on('inline-images-replaced', () => {
+    if (!editor.value) return
+
+    props.context.node.input(getEditorContent(editor.value, contentType.value))
+  })
 
   if (VITE_TEST_MODE) {
     testFlags.set(`${props.context.formId}.${props.context.node.name}.editor.ready`)

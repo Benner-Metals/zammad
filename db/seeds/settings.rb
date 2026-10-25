@@ -336,6 +336,18 @@ Setting.create_if_not_exists(
   frontend:    true
 )
 Setting.create_if_not_exists(
+  title:       __('Alternative fully qualified domain name'),
+  name:        'alternative_fqdn',
+  area:        'System::WebSocket',
+  description: __('Defines an additional fully qualified domain name of the system, which is accepted as an origin for WebSocket connections.'),
+  state:       '',
+  preferences: {
+    online_service_disable: true,
+    permission:             ['admin.system'],
+  },
+  frontend:    true
+)
+Setting.create_if_not_exists(
   title:       __('WebSocket backend'),
   name:        'websocket_backend',
   area:        'System::WebSocket',
@@ -1808,6 +1820,18 @@ Setting.create_if_not_exists(
         placeholder: 'common',
       },
       {
+        display:   __('Microsoft cloud'),
+        null:      true,
+        default:   'global',
+        name:      'cloud',
+        tag:       'select',
+        options:   {
+          'global' => __('Global cloud'),
+          'us_gov' => __('US Government (GCC High)'),
+        },
+        translate: true,
+      },
+      {
         display:   __('Require verified email domain'),
         null:      true,
         default:   false,
@@ -1831,7 +1855,8 @@ Setting.create_if_not_exists(
   },
   state:       {},
   preferences: {
-    permission: ['admin.security'],
+    permission:  ['admin.security'],
+    validations: ['Setting::Validation::MicrosoftOffice365Credentials'],
   },
   frontend:    false
 )

@@ -172,7 +172,8 @@ class EmailReply extends App.Controller
 
   @cleanUpHtmlSelection: (selected) ->
     if selected
-      cleaned_up = App.Utils.htmlCleanup(selected).html()
+      # A selection of a single element would otherwise be cleaned up as the root and lose its own tag.
+      cleaned_up = App.Utils.htmlCleanup($('<div>').html(selected)).html()
 
       return cleaned_up if cleaned_up
 
@@ -225,6 +226,9 @@ class EmailReply extends App.Controller
 
   # Selection.containsNode is not supported in IE, hence check
   @containsNode: (node) ->
+    # HTML articles with an empty body render no content element
+    return false if !node
+
     selected = App.ClipBoard.getSelectedObject()
     if typeof selected.containsNode == 'function'
       return selected.containsNode(node, false)

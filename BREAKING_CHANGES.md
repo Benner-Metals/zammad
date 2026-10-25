@@ -73,6 +73,88 @@ instead.
 
 ## 7.2
 
+### Verifying a signup email address no longer signs the user in
+
+**Who is affected?** Integrations that redeem a signup verification token through
+`POST /api/v1/users/email_verify` or the `userSignupVerify` GraphQL mutation and rely on the session
+that the redemption used to establish, and admins who send a verification or password reset link to a
+deactivated account.
+
+Redeeming the token established a fully authenticated session for the account, without the account's
+password and without the second factor configured for it. Both endpoints now only mark the email
+address as verified and establish no session. The REST endpoint still answers
+`200 {"message":"ok","user_email":"…"}`, but the response no longer carries a session cookie. The
+mutation's payload field `session` was replaced by a boolean `success`, so a client selecting
+`session { id }` receives a GraphQL error.
+
+The resend endpoints `POST /api/v1/users/email_verify_send` and the `userSignupResend` mutation now
+refuse to mint a token for an inactive account. They keep answering positively, so that the existence
+of an account is not leaked, but no mail is sent. `POST /api/v1/users/password_reset` has always
+behaved this way.
+
+A non-persistent token — `Signup`, `PasswordReset`, `AdminAuth`, `KnowledgeBasePreview` — is now
+rejected when it belongs to an inactive user. Previously only persistent tokens were checked this
+way, so a link minted before the account was deactivated no longer works — a self-signup account
+that is deactivated before the user clicks the link is now refused where it was verified before.
+
+⚠️ Sign in through `POST /api/v1/signin` or the `login` mutation after redeeming a verification
+token, and pass the configured second factor there. Change GraphQL clients to select `success`
+instead of `session`. Activate a deactivated account before sending it a verification or password
+reset link.
+
+**Related advisory:** [GHSA-f3qr-94c2-7mx2](https://github.com/zammad/zammad/security/advisories/GHSA-f3qr-94c2-7mx2)
+
+**Related issue:** [#6431](https://github.com/zammad/zammad/issues/6431)
+
+### The getting started endpoints require `admin.wizard` once the system is set up
+
+**Who is affected?** Integrations that read `GET /api/v1/getting_started` or
+`GET /api/v1/getting_started/auto_wizard` while authenticated as a user without the `admin.wizard`
+permission, and any integration that reads them while a migration is running.
+
+On a system that is set up, both endpoints returned the list of active groups and of active email
+addresses, the branding config and the available email channel drivers to every authenticated user,
+customers included. That data is only of use to a user who may run the setup wizard, and it is
+restricted on its own endpoints: `GET /api/v1/email_addresses` answers a customer with `403`, and
+`GET /api/v1/groups/:id` field-scopes its response. Both endpoints now answer a user without
+`admin.wizard` with `403 Forbidden` instead.
+
+Before the setup, and while a migration is running, the endpoints stay reachable without
+authentication: a migration is started anonymously from the installer, and its progress screens have
+no user to authenticate as. While a migration is running the response is now reduced to the setup and
+migration state — `setup_done`, `import_mode`, `import_backend` and `system_online_service` — which
+is all those screens read; the group and email address list, the branding config and the email
+channel drivers are no longer part of it, for any caller. A migration only clears its import mode
+when it succeeds, so a failed one would otherwise keep that data readable without authentication
+indefinitely. Outside a migration the response is unchanged for users with `admin.wizard`.
+
+⚠️ Switch integrations that read the group or email address list from these endpoints to an account
+with the `admin.wizard` permission — an API token needs that permission in its scope as well — or to
+`GET /api/v1/groups` respectively `GET /api/v1/email_addresses`.
+
+**Related advisory:** [GHSA-x3fm-p95w-xj7v](https://github.com/zammad/zammad/security/advisories/GHSA-x3fm-p95w-xj7v)
+
+### The legacy WebSocket login is authenticated from the session cookie and `signshow` no longer returns `session_id`
+
+**Who is affected?** Developers of custom clients that connect to the legacy WebSocket server and
+authenticate with a `session_id` in the `login` event, integrations that read `session_id` from the
+`GET /api/v1/signshow` response, and admins whose `http_type` and `fqdn` settings do not match the URL
+users open Zammad with.
+
+The `GET /api/v1/signshow` response contained the ID of the current session for logged-in users, and the
+legacy frontend sent that ID in the `login` event of the WebSocket connection to authenticate it. Exposing
+the session ID to page scripts was unnecessary and made it easier to steal a session. The `session_id`
+key was removed from the response, and the WebSocket server now ignores any `session_id` in the `login`
+payload. Instead it resolves the user from the session cookie sent with the WebSocket handshake, in the
+same way ActionCable already does for the new frontend, and only if the handshake `Origin` header matches
+`<http_type>://<fqdn>` or a localhost origin. A `login` event without a matching cookie and origin creates
+an unauthenticated WebSocket session that receives no user-specific data.
+
+⚠️ Send the session cookie with the WebSocket handshake instead of a `session_id` in the `login` payload,
+and make sure the `http_type` and `fqdn` settings match the origin users open Zammad with.
+
+**Related advisory:** [GHSA-23hj-h8w6-rgm3](https://github.com/zammad/zammad/security/advisories/GHSA-23hj-h8w6-rgm3)
+
 ### Zammad's reverse proxy configuration is authoritative for the request scheme
 
 **Who is affected?** Admins running the Docker images or a newly installed nginx behind a proxy
