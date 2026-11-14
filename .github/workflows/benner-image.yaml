@@ -62,6 +62,19 @@ jobs:
         with:
           path: vendor/bundle
           key: ${{ runner.os }}-cache-bundler-${{ hashFiles('Gemfile.lock') }}
+      - name: Ruby from .ruby-version
+        # The zammad-ci image may not carry the branch's Ruby (its 2026-11-14 rebuild has only
+        #   4.0.9, while 7.2.3 needs 3.4.12). Install and select it as RVM's default; the later
+        #   steps load RVM in the checkout, which also selects the .ruby-version Ruby.
+        run: |
+          source /etc/profile.d/rvm.sh
+          version=$(cat .ruby-version)
+          # The image removes RVM's source directory, which a source build needs.
+          mkdir -p "${rvm_path}/src"
+          rvm install "$version"
+          rvm use "$version" --default
+          # Show the Ruby that a later step gets when it loads RVM in a new shell.
+          bash -c 'source /etc/profile.d/rvm.sh && ruby -v && gem -v'
       - name: Pre
         run: .github/workflows/ci/pre.sh
       - name: Benner specs
