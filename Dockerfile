@@ -118,9 +118,12 @@ RUN bundle exec bootsnap precompile --gemfile app/ lib/
 # Final stage for app image
 FROM base
 
-# Ensure latest patches are applied.
+# Ensure latest patches are applied. NGINX_MIN is the lowest nginx package this image may ship;
+#   raising it also changes this layer's cache key, so a cached layer cannot satisfy it.
+ARG NGINX_MIN=1.26.3-3+deb13u11
 RUN apt-get update -qq && \
     apt-get upgrade -y && \
+    dpkg --compare-versions "$(dpkg-query -W -f='${Version}' nginx)" ge "${NGINX_MIN}" && \
     rm -rf /var/lib/apt/lists /var/cache/apt/archives
 
 # ZAMMAD_DOCKER is used by Zammad to take decisions for containerized environments,

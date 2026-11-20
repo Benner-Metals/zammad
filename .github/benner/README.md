@@ -16,6 +16,7 @@
 | Rotate Microsoft app secrets across tenant authorities                           | `c5e293fa6f`             |
 | Test: Cover Microsoft Graph move mode together with national clouds.             | `ac273cca9f` (spec only) |
 | Maintenance: Build the Benner Metals image and watch upstream.                   | Benner only              |
+| Maintenance: Require the fixed nginx package and build without a layer cache.    | Benner only              |
 
 The move commits are the complete range of `zammad-graph-move-to-folder` at `bde4e97e2c` and the
 cloud commits that of `zammad-national-cloud` at `c5e293fa6f`; their combination matches
@@ -39,7 +40,9 @@ Both features are also proposed upstream. Each picked commit names its source in
 ## Workflows
 
 - **benner-image** runs on every push to `benner/7.2` and on demand. It runs
-  [`specs.sh`](specs.sh) and the catalog check, then builds `linux/amd64` and pushes. A commit
+  [`specs.sh`](specs.sh) and the catalog check, then builds `linux/amd64` without a layer cache
+  and pushes. The build fails if Debian's nginx package is older than `NGINX_MIN` in the
+  `Dockerfile`; raise it when Debian ships an nginx security fix. A commit
   with a published reservation is not rebuilt; otherwise it gets a new number, and the run
   summary records the digest. Re-run all jobs, not only the image job: a partial re-run reuses
   the earlier reservation and stops.
