@@ -217,8 +217,9 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           pull: true
           push: true
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # No layer cache: the apt layers must read Debian's mirror on every build, or a cached
+          #   layer republishes old packages.
+          no-cache: true
 
       - name: Summary
         env:
