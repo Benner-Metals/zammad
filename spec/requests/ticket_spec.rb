@@ -2041,6 +2041,118 @@ RSpec.describe 'Ticket', type: :request do
       end
     end
 
+    describe 'asset redaction in ticket write responses' do
+      let(:organization) do
+        create(:organization, note: 'internal organization note', domain: 'internal.example.com', vip: true)
+      end
+      let(:owner) do
+        create(:agent,
+               groups:     Group.all,
+               phone:      '+49 30 111111',
+               mobile:     '+49 170 222222',
+               department: 'Internal Department',
+               street:     'Internal Street 1',
+               zip:        '12345',
+               city:       'Internalcity',
+               country:    'Germany',
+               note:       'internal agent note')
+      end
+      let(:ticket_customer) do
+        create(:customer, organization: organization, phone: '+49 30 999999', note: 'internal customer note')
+      end
+      let(:ticket) do
+        create(:ticket, group: ticket_group, customer: ticket_customer, owner: owner)
+      end
+
+      before do
+        ticket
+        # Drop buffered events from factory creation, so the dispatch during the
+        # request only handles the events the request itself produced.
+        TransactionDispatcher.reset
+        authenticated_as(ticket_customer)
+      end
+
+      def asset_attributes(body, model, id)
+        body.dig('assets', model, id.to_s)
+      end
+
+      def asset_attribute_names(body)
+        body['assets'].transform_values do |records|
+          records.transform_values { |attributes| attributes.keys.sort }
+        end
+      end
+
+      # The asset filters redact sensitive attributes based on UserInfo. Transaction dispatch runs
+      # inside the endpoint's Transaction.execute, i.e. before the response is rendered - it must
+      # not strip the user context those filters depend on.
+      shared_examples 'redacting assets like the matching read response' do |parameter|
+        let(:update_params) { { title: 'updated by customer' } }
+
+        it 'redacts sensitive attributes of the ticket owner', :aggregate_failures do
+          put "/api/v1/tickets/#{ticket.id}?#{parameter}", params: update_params, as: :json
+
+          expect(response).to have_http_status(:ok)
+          expect(asset_attributes(json_response, 'User', owner.id).keys)
+            .not_to include('phone', 'mobile', 'department', 'street', 'zip', 'city', 'country', 'note', 'email')
+        end
+
+        it 'redacts internal attributes of the organization', :aggregate_failures do
+          put "/api/v1/tickets/#{ticket.id}?#{parameter}", params: update_params, as: :json
+
+          expect(response).to have_http_status(:ok)
+          expect(asset_attributes(json_response, 'Organization', organization.id).keys)
+            .not_to include('note', 'domain', 'vip')
+        end
+
+        it 'redacts sensitive attributes of the requesting customer', :aggregate_failures do
+          put "/api/v1/tickets/#{ticket.id}?#{parameter}", params: update_params, as: :json
+
+          expect(response).to have_http_status(:ok)
+          expect(asset_attributes(json_response, 'User', ticket_customer.id).keys)
+            .not_to include('phone', 'note')
+        end
+
+        it 'renders the same asset attributes as the read response', :aggregate_failures do
+          put "/api/v1/tickets/#{ticket.id}?#{parameter}", params: update_params, as: :json
+          update_response = json_response
+
+          get "/api/v1/tickets/#{ticket.id}?#{parameter}", params: {}, as: :json
+
+          expect(response).to have_http_status(:ok)
+          expect(asset_attribute_names(update_response)).to eq(asset_attribute_names(json_response))
+        end
+
+        # Service::Base#execute restores the current user id on its own, so this endpoint relies
+        # on two independent safeguards.
+        it 'redacts sensitive attributes on title update', :aggregate_failures do
+          put "/api/v1/tickets/#{ticket.id}/update_title?#{parameter}", params: update_params, as: :json
+
+          expect(response).to have_http_status(:ok)
+          expect(asset_attributes(json_response, 'User', owner.id).keys)
+            .not_to include('phone', 'mobile', 'note', 'email')
+        end
+
+        it 'redacts sensitive attributes on ticket creation', :aggregate_failures do
+          params = {
+            title:    'created by customer',
+            group_id: ticket_group.id,
+            article:  { body: 'some body' },
+          }
+
+          post "/api/v1/tickets?#{parameter}", params: params, as: :json
+
+          expect(response).to have_http_status(:created)
+          expect(asset_attributes(json_response, 'Organization', organization.id).keys)
+            .not_to include('note', 'domain', 'vip')
+          expect(asset_attributes(json_response, 'User', ticket_customer.id).keys)
+            .not_to include('phone', 'note')
+        end
+      end
+
+      it_behaves_like 'redacting assets like the matching read response', 'full=true'
+      it_behaves_like 'redacting assets like the matching read response', 'all=true'
+    end
+
     it 'does ticket split with html - check attachments (05.01)' do
       ticket = create(
         :ticket,
@@ -2690,6 +2802,32 @@ RSpec.describe 'Ticket', type: :request do
         it 'is not present in response' do
           expect(response).to have_http_status(:ok)
           expect(json_response['links']).to be_blank
+        end
+      end
+    end
+
+    context 'referencing checklist present', authenticated_as: -> { agent }, current_user_id: 1 do
+      let(:referencing_ticket)    { create(:ticket, group: ticket.group) }
+      let(:referencing_checklist) { create(:checklist, ticket: referencing_ticket) }
+
+      before do
+        Setting.set('checklist', true)
+        referencing_checklist.items.create!(ticket:)
+        get "/api/v1/tickets/#{ticket.id}", params: { all: 'true' }, as: :json
+      end
+
+      it 'is present in response', :aggregate_failures do
+        expect(response).to have_http_status(:ok)
+        expect(json_response['assets']).to include_assets_of([referencing_checklist, referencing_ticket, *referencing_checklist.items])
+      end
+
+      context 'no permission to referencing Ticket Group' do
+        let(:referencing_ticket) { create(:ticket) }
+
+        it 'is marked as inaccessible without ticket and item assets', :aggregate_failures do
+          expect(response).to have_http_status(:ok)
+          expect(json_response.dig('assets', 'Checklist', referencing_checklist.id.to_s)).to eq('id' => referencing_checklist.id, 'ticket_inaccessible' => true)
+          expect(json_response['assets']).not_to include_assets_of([referencing_ticket, referencing_ticket.customer, *referencing_checklist.items])
         end
       end
     end

@@ -55,11 +55,11 @@ class _webSocketSingleton extends App.Controller
 
     @backend = @Config.get('websocket_backend') || 'websocket'
 
-    # on auth, send new auth data to server
+    # on auth, reconnect so the server picks up the new session cookie
     App.Event.bind(
       'auth'
       (data) =>
-        @auth()
+        @reconnect()
       'ws'
     )
 
@@ -111,9 +111,24 @@ class _webSocketSingleton extends App.Controller
     # logon websocket
     data =
       event: 'login'
-      session_id: App.Config.get('session_id')
       fingerprint: App.Browser.fingerprint()
     @send(data)
+
+  # The server authenticates a connection from the session cookie of its handshake,
+  #   so an already open connection does not notice a login or logout.
+  reconnect: =>
+    return @auth() if @backend is 'ajax'
+    return if !@ws
+    return if @connectionKeepDown
+
+    ws = @ws
+    ws.onopen = ws.onmessage = ws.onclose = ws.onerror = null
+    ws.close()
+
+    @connectionEstablished = false
+    for key in ['websocket-try-reconnect-after-x-sec', 'websocket-ping-check', 'websocket-pong']
+      App.Delay.clear(key, 'ws')
+    @connect()
 
   close: ( params = {} ) =>
     if params['force']
@@ -167,6 +182,7 @@ class _webSocketSingleton extends App.Controller
       @ws           = new window.WebSocket("#{protocol}#{window.location.hostname}:#{@backend_port}/")
     else
       @_ajaxInit()
+      return
 
     # Set event handlers.
     @ws.onopen = =>
@@ -279,10 +295,13 @@ class _webSocketSingleton extends App.Controller
         if data.client_id
           @log 'debug', 'ajax:new client_id', data.client_id
           @client_id = data.client_id
+          @connectionEstablished    = true
+          @connectionWasEstablished = true
           @_ajaxReceive()
           @_ajaxSendQueue()
         @_ajaxInitDone = true
       error: =>
+        @connectionEstablished = false
         @_ajaxInitDone = true
 
         # try reconnect on error after x sec.
@@ -311,11 +330,9 @@ class _webSocketSingleton extends App.Controller
         queue: true
         success: (data) =>
           if data && data.error
-            @client_id = undefined
-            @_ajaxInit(force: true)
+            @_ajaxReset()
         error: =>
-          @client_id = undefined
-          @_ajaxInit(force: true)
+          @_ajaxReset()
       )
 
   _ajaxReceive: =>
@@ -332,14 +349,17 @@ class _webSocketSingleton extends App.Controller
           @log 'debug', 'ajax:onmessage', data
           @_receiveMessage(data)
           if data && data.error
-            @client_id = undefined
-            @_ajaxInit(force: true)
+            @_ajaxReset()
           @_ajaxReceive()
         error: (data) =>
-          @client_id = undefined
-          @_ajaxInit(force: true)
+          @_ajaxReset()
       )
     , 2000, '_ajaxReceive', 'ws')
+
+  _ajaxReset: =>
+    @client_id             = undefined
+    @connectionEstablished = false
+    @_ajaxInit(force: true)
 
 class Modal extends App.ControllerModal
   buttonClose: false

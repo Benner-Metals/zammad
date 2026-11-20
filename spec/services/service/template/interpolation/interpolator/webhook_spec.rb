@@ -248,6 +248,39 @@ RSpec.describe Service::Template::Interpolation::Interpolator::Webhook do
       end
     end
 
+    context 'when the replacement value contains backslashes' do
+      let(:ticket)    { create(:ticket, title: 'C:\dir and "quote"') }
+      let(:template)  { { 'ticket.title' => '#{ticket.title}' }.to_json }
+      let(:json_data) { { 'ticket.title' => 'C:\dir and "quote"' } }
+
+      it 'escapes them into valid JSON and round-trips the value' do
+        expect(service_result).to eq(json_data)
+      end
+    end
+
+    context 'when the replacement value contains control characters' do
+      let(:value)     { "echo $(date +\\%H)\vvt\bbs\u0001ctl\ttab\nnl" }
+      let(:article)   { create(:ticket_article, body: value) }
+      let(:template)  { { 'article.body' => '#{article.body}' }.to_json }
+      let(:json_data) { { 'article.body' => value } }
+
+      it 'escapes them into valid JSON and round-trips the value' do
+        expect(service_result).to eq(json_data)
+      end
+    end
+
+    context 'when the replacement value contains invalid UTF-8' do
+      let(:ticket)    { create(:ticket) }
+      let(:template)  { { 'ticket.note' => '#{ticket.title}' }.to_json }
+      let(:json_data) { { 'ticket.note' => "bad\uFFFDbyte" } }
+
+      before { allow(ticket).to receive(:title).and_return("bad\xFFbyte") }
+
+      it 'replaces the invalid bytes and returns valid JSON' do
+        expect(service_result).to eq(json_data)
+      end
+    end
+
     context 'when object attributes are used in the placeholder', db_strategy: :reset do
       let(:ticket) { create(:ticket, object_manager_attribute_name => object_manager_attribute_value) }
 
@@ -360,6 +393,10 @@ RSpec.describe Service::Template::Interpolation::Interpolator::Webhook do
           expect(service_result['link']).to match(%r{http.*#ticket/zoom/#{ticket.id}$})
           expect(service_result['message']).to include('Created by')
           expect(service_result['changes']).to include('State: new')
+        end
+
+        it 'separates the changes with real line breaks (#6449)' do
+          expect(service_result['changes']).to eq("* Group: #{ticket.group.name}\n* Owner: #{ticket.owner.fullname}\n* State: new")
         end
       end
 

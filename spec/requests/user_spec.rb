@@ -1376,6 +1376,13 @@ RSpec.describe 'User', performs_jobs: true, type: :request do
       expect(response).to have_http_status(:unprocessable_content)
     end
 
+    it 'does not allow to create an administrator account while an import is running' do
+      Setting.set('import_mode', true)
+      make_request successful_params
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(User.find_by(email: successful_params[:email])).to be_nil
+    end
+
     it 'requires email' do
       make_request successful_params.merge(email: nil)
       expect(response).to have_http_status(:unprocessable_content)
@@ -1467,14 +1474,14 @@ RSpec.describe 'User', performs_jobs: true, type: :request do
 
     it 'sends email verification notifications' do
       allow(NotificationFactory::Mailer).to receive(:notification)
-      make_request successful_params
+      perform_enqueued_jobs(only: NotificationMailerJob) { make_request successful_params }
       expect(NotificationFactory::Mailer).to have_received(:notification) { |arguments| arguments[:template] == 'signup' }
     end
 
     it 'sends password reset notification when email already used' do
       create(:customer, email: successful_params[:email])
       allow(NotificationFactory::Mailer).to receive(:notification)
-      make_request successful_params
+      perform_enqueued_jobs(only: NotificationMailerJob) { make_request successful_params }
       expect(NotificationFactory::Mailer).to have_received(:notification) { |arguments| arguments[:template] == 'signup_taken_reset' }
     end
 
@@ -1793,6 +1800,24 @@ RSpec.describe 'User', performs_jobs: true, type: :request do
         let(:search_ids) { search_agents.last(2).map(&:id) }
 
         include_examples 'result check'
+      end
+
+      shared_examples 'unrestricted result check' do
+        it 'returns all agents matching the query' do
+          expect(json_response.pluck('id')).to eq(search_agents.map(&:id))
+        end
+      end
+
+      context 'when ids is a blank string' do
+        let(:search_ids) { '' }
+
+        include_examples 'unrestricted result check'
+      end
+
+      context 'when ids is an empty list' do
+        let(:search_ids) { [] }
+
+        include_examples 'unrestricted result check'
       end
     end
 

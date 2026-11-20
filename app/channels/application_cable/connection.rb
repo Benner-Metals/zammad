@@ -3,7 +3,13 @@
 module ApplicationCable
   class Connection < ActionCable::Connection::Base
     identified_by :current_user
-    identified_by :sid
+
+    # The session id is deliberately not a connection identifier: 'where' requires a value for
+    #   every identifier, and the public session id of an established connection cannot be
+    #   looked up anywhere, since only its hashed private id is stored. Keeping current_user as
+    #   the only identifier is what allows all connections of a user to be terminated via
+    #   'ActionCable.server.remote_connections.where(current_user: user).disconnect'.
+    attr_accessor :sid
 
     # current_user is stored in the context of GraphQL which is persistent
     #   for the scope of a subscription and cannot be changed from within
@@ -13,19 +19,40 @@ module ApplicationCable
     def connect
       return if session_id.blank?
 
-      self.current_user = find_verified_user
+      self.current_user = verified_user
       self.sid          = session_id
+    end
+
+    # Whether the connection may still be served as the user it was authenticated as. The user
+    #   stays attached for the connection's whole lifetime, so while maintenance mode is on, the
+    #   session is verified again for every operation and every subscription update. A session that
+    #   meanwhile authorizes somebody else does not count: that takes a new connection, as any login
+    #   or logout does.
+    def still_authorized?
+      return true if !current_user || !Auth::MaintenanceMode.active?
+
+      verified_user == current_user
     end
 
     private
 
-    def find_verified_user
+    # The user the session cookie authorizes right now, with the prerequisites of the HTTP
+    #   transport applied (see ApplicationController::Authenticates#authentication_check_prerequesits),
+    #   otherwise a session that was retained across a deactivation would stay authorized on this
+    #   transport.
+    def verified_user
       private_id = Rack::Session::SessionId.new(session_id).private_id
 
       session = ActiveRecord::SessionStore::Session.find_by(session_id: private_id)
       return if !session
 
-      User.find_by(id: session.data['user_id'])
+      user = User.find_by(id: session.data['user_id'])
+
+      return if !user&.active?
+      return if Auth::SwitchedSession.revoked?(session.data['switched_from_user_id'])
+      return if Auth::MaintenanceMode.blocks?(user, switched_from_user_id: session.data['switched_from_user_id'])
+
+      user
     end
 
     def session_id

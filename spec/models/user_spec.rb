@@ -270,6 +270,11 @@ RSpec.describe User, type: :model do
   it_behaves_like 'User::HasTwoFactor'
 
   describe 'adding a group' do
+    # the group associations are only part of the attributes for privileged callers
+    around do |example|
+      UserInfo.with_system_context { example.run }
+    end
+
     it 'invalidates the association ID cache for both the user and the group' do
       agent = create(:agent)
       group = create(:group)
@@ -281,6 +286,32 @@ RSpec.describe User, type: :model do
   end
 
   describe 'Class methods:' do
+    describe '.create_from_hash!' do
+      let(:auth_hash) do
+        {
+          'provider' => 'openid_connect',
+          'uid'      => SecureRandom.uuid,
+          'login'    => 'oidc-user',
+          'info'     => { 'email' => 'oidc-user@example.com', 'name' => 'OIDC User', 'location' => 'Berlin' },
+        }
+      end
+
+      it 'stores the location as address' do
+        expect(described_class.create_from_hash!(auth_hash)).to have_attributes(address: 'Berlin')
+      end
+
+      context 'when the address attribute was deleted', db_strategy: :reset do
+        before do
+          ObjectManager::Attribute.remove(object: 'User', name: 'address')
+          ObjectManager::Attribute.migration_execute
+        end
+
+        it 'creates the user' do
+          expect { described_class.create_from_hash!(auth_hash) }.to change(described_class, :count).by(1)
+        end
+      end
+    end
+
     describe '.identify' do
       it 'returns users by given login' do
         expect(described_class.identify(user.login)).to eq(user)
@@ -460,6 +491,36 @@ RSpec.describe User, type: :model do
         user = described_class.new(firstname: nil, lastname: nil, email: nil, phone: '12345', login: 'phone-only')
 
         expect(user.fullname).to eq('12345')
+      end
+    end
+
+    describe '#display_name_from_parts' do
+      subject(:user) { described_class.new(firstname: 'John', lastname: 'Doe') }
+
+      it 'joins first and last name by default' do
+        expect(user.display_name_from_parts).to eq('John Doe')
+      end
+
+      context "when user_name_format is 'last_first'" do
+        before { Setting.set('user_name_format', 'last_first') }
+
+        it 'reverses the order' do
+          expect(user.display_name_from_parts).to eq('Doe John')
+        end
+      end
+
+      context "when user_name_format is 'last_first_comma'" do
+        before { Setting.set('user_name_format', 'last_first_comma') }
+
+        it 'reverses the order and joins with a comma' do
+          expect(user.display_name_from_parts).to eq('Doe, John')
+        end
+      end
+
+      it 'never falls back to personal data' do
+        user = described_class.new(firstname: nil, lastname: '', email: 'user@example.com', phone: '12345')
+
+        expect(user.display_name_from_parts).to eq('')
       end
     end
 
@@ -2290,6 +2351,12 @@ RSpec.describe User, type: :model do
 
   describe 'Assign user to multiple organizations #1573' do
     context 'when importing users via csv' do
+      # CSV import diffs records by their attributes, so it needs the unredacted ones - in the
+      # application it runs either as an admin or as background work
+      around do |example|
+        UserInfo.with_system_context { example.run }
+      end
+
       let(:organization1) { create(:organization) }
       let(:organization2) { create(:organization) }
       let(:organization3) { create(:organization) }

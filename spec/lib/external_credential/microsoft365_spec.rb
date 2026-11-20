@@ -461,6 +461,13 @@ RSpec.describe ExternalCredential::Microsoft365 do
   end
 
   describe '.user_info' do
+    it 'extracts user information from an unpadded base64url encoded id_token' do
+      payload = Base64.urlsafe_encode64(JSON.generate({ email: 'j.mueller@example.com', name: 'Jürgen Müller?' }), padding: false)
+
+      info = described_class.user_info("header.#{payload}.signature")
+      expect(info).to include(email: 'j.mueller@example.com', name: 'Jürgen Müller?')
+    end
+
     it 'extracts user information from id_token' do
       info = described_class.user_info(id_token)
       expect(info[:email]).to eq(email_address)
@@ -477,7 +484,7 @@ RSpec.describe ExternalCredential::Microsoft365 do
       create(:microsoft365_channel)
     end
 
-    let(:external_credential) { create(:external_credential, name: provider, credentials: { client_id: 'id1337', client_secret: 'dummy' }) }
+    let(:external_credential) { create(:external_credential, name: provider, credentials: { client_id: 'id1337', client_tenant: 'xxx', client_secret: 'dummy' }) }
 
     context 'when client_secret was updated' do
       context 'when secret is different' do
@@ -487,7 +494,7 @@ RSpec.describe ExternalCredential::Microsoft365 do
         end
 
         it 'does not update the channel' do
-          external_credential.update!(credentials: { client_id: 'id1337', client_secret: 'dummy-new' })
+          external_credential.update!(credentials: { client_id: 'id1337', client_tenant: 'xxx', client_secret: 'dummy-new' })
 
           expect(channel.reload.options[:auth][:client_secret]).to eq('dummy-other')
         end
@@ -496,7 +503,7 @@ RSpec.describe ExternalCredential::Microsoft365 do
       context 'when secret is the same' do
         it 'updates the setting' do
           channel
-          external_credential.update!(credentials: { client_id: 'id1337', client_secret: 'dummy-new' })
+          external_credential.update!(credentials: { client_id: 'id1337', client_tenant: 'xxx', client_secret: 'dummy-new' })
 
           expect(channel.reload.options[:auth][:client_secret]).to eq('dummy-new')
         end

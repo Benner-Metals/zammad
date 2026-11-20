@@ -102,15 +102,11 @@ module ApplicationController::Authenticates
     token = Doorkeeper::OAuth::Token.from_bearer_authorization(request)
     if token
       request.session_options[:skip] = true # do not send a session cookie
-      logger.debug { "OAuth2 token auth check '#{token}'" }
-      access_token = Doorkeeper::AccessToken.by_token(token)
+      access_token = Doorkeeper::OAuth::Token.authenticate(request, :from_bearer_authorization)
 
       raise Exceptions::NotAuthorized, __('The provided token is invalid.') if !access_token
-
-      # check expire
-      if access_token.expires_in && (access_token.created_at + access_token.expires_in) < Time.zone.now
-        raise Exceptions::NotAuthorized, __('OAuth2 token is expired!')
-      end
+      raise Exceptions::NotAuthorized, __('OAuth2 token is expired!') if access_token.expired?
+      raise Exceptions::NotAuthorized, __('OAuth2 token is revoked!') if access_token.revoked?
 
       # if access_token.scopes.empty?
       #   raise Exceptions::NotAuthorized, 'OAuth2 scope missing for token!'
@@ -130,7 +126,10 @@ module ApplicationController::Authenticates
   def authentication_check_prerequesits(user, auth_type)
     raise Exceptions::Forbidden, __('Maintenance mode enabled!') if in_maintenance_mode?(user)
 
-    raise Exceptions::NotAuthorized, Auth::Error::AuthenticationFailed::MESSAGE if !user.active
+    # The second condition covers a session an admin switched into another user from: it is
+    #   served as that user, so the account that holds it is not the one checked above (see
+    #   Auth::SwitchedSession).
+    raise Exceptions::NotAuthorized, Auth::Error::AuthenticationFailed::MESSAGE if !user.active || Auth::SwitchedSession.revoked?(session[:switched_from_user_id])
 
     current_user_set(user, auth_type)
     user_device_log(user, auth_type)

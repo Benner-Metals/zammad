@@ -69,6 +69,11 @@ class TransactionDispatcher
 
   def self.execute_single_backend(backend, item, params)
     Rails.logger.debug { "Execute single backend #{backend}" }
+
+    # The context is intentionally not restored afterwards: a lot of code writes records on
+    #   behalf of other users and relies on a blank UserInfo to keep the ownership it assigns
+    #   explicitly (see ApplicationModel::ChecksUserColumnsFillup). Endpoints that render
+    #   assets after dispatch re-establish the context themselves.
     begin
       UserInfo.reset
       integration = backend.new(item, params)
@@ -84,10 +89,10 @@ class TransactionDispatcher
   #   with a loud log rather than letting a single stale entry take down every
   #   request/job that dispatches transactions.
   def self.resolve_backend(backend)
-    backend_class = backend.safe_constantize
+    backend_class = ApplicationLib.load_adapter(backend, namespace: Transaction)
 
     if backend_class.nil?
-      Rails.logger.error "Transaction backend '#{backend}' is configured but not defined; skipping it."
+      Rails.logger.error "Transaction backend '#{backend}' is configured but not a defined transaction backend; skipping it."
     end
 
     backend_class

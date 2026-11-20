@@ -21,7 +21,7 @@ class ChannelsFacebookController < ApplicationController
   end
 
   def update
-    model_update_render(Channel, params)
+    model_update_render(Channel.in_area('Facebook::Account'), params.except(:area))
   end
 
   def enable
@@ -44,4 +44,11 @@ class ChannelsFacebookController < ApplicationController
     render json: {}
   end
 
+  private
+
+  # The channel dialog posts back the whole channel including its masked options,
+  # so the masked tokens must be restored instead of being persisted.
+  def sensitive_attributes(_input, _object)
+    Channel::SENSITIVE_FIELDS
+  end
 end
